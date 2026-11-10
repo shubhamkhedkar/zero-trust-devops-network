@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+.env
+.env.*
+!.env.example
+# Rendered output may contain real host data; keep it out of git.
+out/
+rendered/
+# Never commit WireGuard key material.
+*.key
+*.privkey
+privatekey
+publickey

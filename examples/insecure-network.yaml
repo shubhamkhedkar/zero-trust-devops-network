@@ -1,0 +1,20 @@
+# Deliberately insecure definition used to demonstrate what the validator rejects.
+network:
+  name: flat-network
+  overlay_cidr: 34.120.0.0/16
+  default_action: allow
+
+groups:
+  everyone: {}
+  prod-db: { sensitive: true }
+
+peers:
+  - { name: laptop, address: 34.120.0.5, groups: [everyone], private_key: "REDACTED-EXAMPLE" }
+  - { name: db, address: 34.120.0.5, groups: [prod-db, ghosts] }
+  - { name: router, address: 34.120.0.9, groups: [everyone], routes: [0.0.0.0/0] }
+
+policies:
+  - { name: allow-everything, sources: [All], destinations: [All], protocol: all }
+  - { name: ssh-anywhere, sources: [All], destinations: [everyone], protocol: tcp, ports: ["22"] }
+  - { name: db-wide-open, sources: [everyone], destinations: [prod-db], protocol: tcp, bidirectional: true }
+  - { name: old-incident, sources: [everyone], destinations: [everyone], protocol: tcp, ports: ["443"], expires: "2024-01-31" }

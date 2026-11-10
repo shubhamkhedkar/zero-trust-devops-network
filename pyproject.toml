@@ -1,0 +1,37 @@
+[project]
+name = "zero-trust-devops-network"
+version = "1.0.0"
+description = "Policy-as-code generator, validator and decision service for zero-trust DevOps networking on WireGuard / NetBird."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Shubham Khedkar" }]
+requires-python = ">=3.11"
+dependencies = ["pyyaml>=6.0.2"]
+
+[project.scripts]
+ztnet = "ztnet.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.3", "ruff>=0.7"]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ztnet"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "BLE"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S108", "S310"]

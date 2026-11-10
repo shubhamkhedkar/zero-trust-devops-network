@@ -1,0 +1,131 @@
+# Example-only zero-trust overlay for a DevOps platform.
+# Hostnames use example.com and every key is a placeholder; nothing here is a real network.
+network:
+  name: platform-overlay
+  overlay_cidr: 100.92.0.0/16        # CGNAT range, the same space NetBird assigns peers from
+  listen_port: 51820
+  default_action: deny
+
+groups:
+  platform-engineers: { description: Humans operating the platform }
+  bastion: { description: Audited jump hosts }
+  ci-runners: { description: GitHub Actions and Jenkins build agents }
+  artifact-registry: { description: Container and package registry }
+  k8s-dev: { description: Development cluster API }
+  k8s-prod: { description: Production cluster API, sensitive: true }
+  databases-prod: { description: Production PostgreSQL, sensitive: true }
+  observability: { description: Prometheus and Alertmanager }
+  vpc-gateways: { description: Routing peers into private VPC subnets }
+
+posture_checks:
+  engineer-device:
+    min_client_version: 0.30.0
+    allowed_os: [linux, macos]
+    require_disk_encryption: true
+  server-baseline:
+    min_client_version: 0.30.0
+    allowed_os: [linux]
+
+peers:
+  - { name: shubham-laptop, address: 100.92.1.10, groups: [platform-engineers], os: macos, client_version: 0.31.2, disk_encrypted: true }
+  - { name: oncall-laptop, address: 100.92.1.11, groups: [platform-engineers], os: linux, client_version: 0.27.4, disk_encrypted: true }
+  - { name: bastion-01, address: 100.92.2.10, groups: [bastion], client_version: 0.31.2, endpoint: "bastion.example.com:51820" }
+  - { name: gha-runner-01, address: 100.92.3.10, groups: [ci-runners], client_version: 0.31.2 }
+  - { name: jenkins-agent-01, address: 100.92.3.11, groups: [ci-runners], client_version: 0.31.2 }
+  - { name: registry-01, address: 100.92.4.10, groups: [artifact-registry], client_version: 0.31.2 }
+  - { name: k8s-dev-api, address: 100.92.5.10, groups: [k8s-dev], client_version: 0.31.2 }
+  - { name: k8s-prod-api, address: 100.92.6.10, groups: [k8s-prod], client_version: 0.31.2 }
+  - { name: prod-db-01, address: 100.92.7.10, groups: [databases-prod], client_version: 0.31.2 }
+  - { name: prometheus-01, address: 100.92.8.10, groups: [observability], client_version: 0.31.2 }
+  - name: vpc-router-01
+    address: 100.92.9.10
+    groups: [vpc-gateways]
+    client_version: 0.31.2
+    endpoint: "vpc-router.example.com:51820"
+    routing_peer: true
+    routes: [10.20.0.0/16]
+
+policies:
+  - name: engineers-to-bastion
+    description: SSH to jump hosts only from compliant engineer devices
+    sources: [platform-engineers]
+    destinations: [bastion]
+    protocol: tcp
+    ports: ["22"]
+    posture_checks: [engineer-device]
+  - name: engineers-ping-bastion
+    sources: [platform-engineers]
+    destinations: [bastion]
+    protocol: icmp
+  - name: bastion-to-prod-k8s
+    sources: [bastion]
+    destinations: [k8s-prod]
+    protocol: tcp
+    ports: ["6443"]
+    posture_checks: [server-baseline]
+  - name: bastion-to-prod-db
+    sources: [bastion]
+    destinations: [databases-prod]
+    protocol: tcp
+    ports: ["5432"]
+    posture_checks: [server-baseline]
+  - name: ci-to-registry
+    sources: [ci-runners]
+    destinations: [artifact-registry]
+    protocol: tcp
+    ports: ["443", "5000"]
+  - name: ci-to-dev-k8s
+    sources: [ci-runners]
+    destinations: [k8s-dev]
+    protocol: tcp
+    ports: ["6443"]
+  - name: ci-to-prod-k8s
+    description: Deploy pipelines reach the prod API only from hardened runners
+    sources: [ci-runners]
+    destinations: [k8s-prod]
+    protocol: tcp
+    ports: ["6443"]
+    posture_checks: [server-baseline]
+  - name: engineers-to-dev-k8s
+    sources: [platform-engineers]
+    destinations: [k8s-dev]
+    protocol: tcp
+    ports: ["443", "6443"]
+    posture_checks: [engineer-device]
+  - name: k8s-to-registry
+    sources: [k8s-dev, k8s-prod]
+    destinations: [artifact-registry]
+    protocol: tcp
+    ports: ["443"]
+  - name: prod-k8s-to-db
+    sources: [k8s-prod]
+    destinations: [databases-prod]
+    protocol: tcp
+    ports: ["5432"]
+    posture_checks: [server-baseline]
+  - name: prometheus-scrape
+    sources: [observability]
+    destinations: [k8s-dev, k8s-prod, databases-prod, bastion]
+    protocol: tcp
+    ports: ["9100", "9187", "10250"]
+    posture_checks: [server-baseline]
+  - name: engineers-to-observability
+    sources: [platform-engineers]
+    destinations: [observability]
+    protocol: tcp
+    ports: ["9090", "9093", "3000"]
+    posture_checks: [engineer-device]
+  - name: engineers-to-private-vpc
+    sources: [platform-engineers]
+    destinations: [vpc-gateways]
+    protocol: tcp
+    ports: ["443"]
+    posture_checks: [engineer-device]
+  - name: break-glass-prod-k8s
+    description: Time-boxed incident access; renew through change review or let it expire
+    sources: [platform-engineers]
+    destinations: [k8s-prod]
+    protocol: tcp
+    ports: ["6443"]
+    posture_checks: [engineer-device]
+    expires: "2027-06-30"
